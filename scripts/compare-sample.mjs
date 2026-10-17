@@ -1,0 +1,20 @@
+import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { characterErrorRate } from '../src/quality.ts';
+import { validateWav } from '../server/comparison.mjs';
+import { root } from './runtime.mjs';
+import path from 'node:path';
+
+const wav = await readFile(path.join(root, '.runtime', 'test-speech.wav'));
+const reference = 'こんにちは。今日は音声認識アプリの動作を確認しています。明日の会議は午後三時からです。';
+const response = await fetch('http://127.0.0.1:3210/api/compare?language=ja-JP', { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav });
+if (!response.ok) throw new Error(await response.text());
+const events = (await response.text()).trim().split('\n').map(JSON.parse);
+const error = events.find(event => event.type === 'error');
+if (error || !events.some(event => event.type === 'done')) throw new Error(error?.error || 'Incomplete comparison');
+const results = Object.fromEntries(events.filter(event => event.type === 'result').map(event => [event.engine, { ...event.result, cer: characterErrorRate(reference, event.result.text) }]));
+const report = { createdAt: new Date().toISOString(), audio: { source: 'Microsoft Haruka Desktop synthetic Japanese speech', sha256: createHash('sha256').update(wav).digest('hex'), durationSeconds: validateWav(wav).seconds }, language: 'ja-JP', llmPostprocessing: false, normalization: 'NFKC, lowercase, remove Unicode punctuation and whitespace; numerals unchanged', reference, results, limitations: 'Single synthetic sample; not a general benchmark. Nemotron is warm and Whisper includes cold model loading. Hardware and numerical precision differ.' };
+const directory = path.join(root, 'reports'); await mkdir(directory, { recursive: true });
+await writeFile(path.join(directory, 'sample-comparison.json'), JSON.stringify(report, null, 2) + '\n');
+await writeFile(path.join(directory, 'sample-comparison.md'), `# 同一音声による文字起こし比較\n\n音声: WindowsのMicrosoft Haruka Desktopで生成した日本語音声（${report.audio.durationSeconds.toFixed(2)}秒）。言語指定は両方とも日本語。LLMによる整形は行っていません。\n\n| モデル | CER | 誤り / 正解文字数 | 所要時間 | 実行環境 |\n|---|---:|---:|---:|---|\n${Object.values(results).map(result => `| ${result.model} | ${result.cer.percent.toFixed(1)}% | ${result.cer.errors} / ${result.cer.length} | ${(result.elapsedMs / 1000).toFixed(2)}秒 | ${result.device || 'CUDA'} |`).join('\n')}\n\n正解文: ${reference}\n\n## Nemotron\n\n${results.nemotron.text}\n\n## Whisper\n\n${results.whisper.text}\n\nCERはUnicode文字単位の編集距離です。全半角・大文字小文字・句読点・空白を正規化します。漢数字と算用数字は同一視していないため「三」と「3」も1文字の誤りになります。これは意味理解の正しさを直接評価する指標ではありません。\n\nこの音声ではNemotronが「今日は」を落とし、Whisperは「三時」を「3時」と表記しています。1本の合成音声で一般的な優劣は判断できません。Nemotronはモデル読込済み、Whisperはモデル読込込みで、実行環境・量子化形式も異なるため、所要時間は参考値です。\n\n実行日時（UTC）: ${report.createdAt}\n\n再実行: npm run test:compare\n`);
+console.log(JSON.stringify(report, null, 2));

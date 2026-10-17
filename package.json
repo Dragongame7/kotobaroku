@@ -1,0 +1,48 @@
+{
+  "name": "kotoba-nemotron-web",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc -b && vite build",
+    "start": "node scripts/start.mjs",
+    "server": "node server/index.mjs",
+    "setup:asr": "node scripts/setup-asr.mjs",
+    "setup:whisper": "node scripts/setup-whisper.mjs",
+    "setup:translation": "node scripts/setup-translation.mjs",
+    "test": "node --test test/*.test.mjs",
+    "test:browser": "playwright test",
+    "test:live": "node scripts/smoke.mjs",
+    "test:compare": "node scripts/compare-sample.mjs",
+    "test:translate": "node scripts/smoke-translation.mjs",
+    "test:sentences": "node scripts/smoke-sentences.mjs",
+    "test:sentence-modes": "node scripts/smoke-sentence-modes.mjs",
+    "test:translation-models": "node scripts/smoke-translation-models.mjs",
+    "setup:llm": "node scripts/setup-llm.mjs",
+    "test:correction": "node scripts/evaluate-correction.mjs",
+    "test:gemma": "node scripts/smoke-gemma.mjs",
+    "test:long": "node scripts/smoke-long-session.mjs",
+    "test:caption-latency": "node scripts/smoke-caption-latency.mjs",
+    "test:gemma-readiness": "node scripts/check-gemma.mjs"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "kuromoji": "0.1.2",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.4.0"
+  },
+  "engines": {
+    "node": ">=22.18"
+  }
+}
