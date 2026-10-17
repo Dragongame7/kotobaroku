@@ -12,3 +12,5 @@ playwright-report/
 .local/
 .hallmark/
 reports/
+deploy/spark/*.env
+deploy/spark/certs/

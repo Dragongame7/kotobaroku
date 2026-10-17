@@ -1,0 +1,7 @@
+# Configure a hostname/certificate trusted by the terminal's Node runtime.
+{$SPARK_HOST}:8443 {
+    tls /etc/kotoba/tls/server.crt /etc/kotoba/tls/server.key
+    reverse_proxy 127.0.0.1:8001 {
+        flush_interval -1
+    }
+}

@@ -1,6 +1,7 @@
+import type { SpeechMetadata } from './SpeakerLabel';
 export type CorrectionMode = 'off' | 'conservative';
 export type Correction = { status: string; mode?: CorrectionMode; correctedSource: string; edits: { from: string; to: string; start: number; end: number; reason: string }[]; fallbackReason?: string; elapsedMs?: number; model?: string };
-export type CorrectedCaption = { documentOffset?: number; stale?: boolean; id: string; source: string; rawSource?: string; revision?: number; status?: string; correction?: Correction; timing?: Record<string, number> };
+export type CorrectedCaption = SpeechMetadata & { documentOffset?: number; stale?: boolean; id: string; source: string; rawSource?: string; revision?: number; status?: string; correction?: Correction; timing?: Record<string, number> };
 export function savedCorrectionMode(): CorrectionMode { try { return localStorage.getItem('kotoba.correction-mode') === 'off' ? 'off' : 'conservative'; } catch { return 'conservative'; } }
 export function correctionLabel(correction?: Correction) {
   if (!correction) return '補正待ち';

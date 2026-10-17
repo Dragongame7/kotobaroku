@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Check, RefreshCw, Settings2 } from 'lucide-react';
+import SpeechSettings from './SpeechSettings';
+import MeetingHistory from './MeetingHistory';
 
-export type LlmSettings = { provider: 'ollama' | 'openai'; baseUrl: string; model: string; hasApiKey: boolean; origin: string; revision: string; checkedAt?: string; error?: string };
-type Draft = Pick<LlmSettings, 'provider' | 'baseUrl' | 'model' | 'revision'> & { apiKeyAction: 'keep' | 'replace' | 'clear'; apiKey: string };
+export type LlmSettings = { provider: 'ollama' | 'openai'; baseUrl: string; model: string; hasApiKey: boolean; origin: string; revision: string; checkedAt?: string; error?: string; disableThinking?: boolean };
+type Draft = Pick<LlmSettings, 'provider' | 'baseUrl' | 'model' | 'revision' | 'disableThinking'> & { apiKeyAction: 'keep' | 'replace' | 'clear'; apiKey: string };
 type TestResult = { token: string; checkedAt: string; checks: string[] };
 const origins: Record<string, string> = { saved: '設定画面から保存', environment: 'LLM環境変数', legacy: '従来のOllama環境変数', default: '既定値', error: '読み込みエラー', initial: '起動時の設定' };
 export default function Settings({ active, locked, onBusy, refresh, back }: { active: boolean; locked: boolean; onBusy: (value: boolean) => void; refresh: () => void; back: () => void }) {
@@ -16,7 +18,7 @@ export default function Settings({ active, locked, onBusy, refresh, back }: { ac
   const controller = useRef<AbortController | null>(null);
   const loadController = useRef<AbortController | null>(null);
   function install(value: LlmSettings) {
-    setCurrent(value); setDraft({ provider: value.provider, baseUrl: value.baseUrl, model: value.model, revision: value.revision, apiKeyAction: 'keep', apiKey: '' }); setResult(null); setModels([]);
+    setCurrent(value); setDraft({ provider: value.provider, baseUrl: value.baseUrl, model: value.model, revision: value.revision, disableThinking: Boolean(value.disableThinking), apiKeyAction: 'keep', apiKey: '' }); setResult(null); setModels([]);
   }
   async function load() {
     loadController.current?.abort(); const request = loadController.current = new AbortController();
@@ -55,10 +57,13 @@ export default function Settings({ active, locked, onBusy, refresh, back }: { ac
         <label htmlFor="llm-key-action">APIキー</label><select id="llm-key-action" value={draft.apiKeyAction} onChange={event => edit({ apiKeyAction: event.target.value as Draft['apiKeyAction'], apiKey: '' })}><option value="keep" disabled={!sameEndpoint}>現在のキーを維持{current?.hasApiKey ? '（保存済み）' : '（未設定）'}</option><option value="replace">新しいキーを入力</option><option value="clear">キーなし・保存済みキーを削除</option></select>
         {draft.apiKeyAction === 'replace' && <><label htmlFor="llm-api-key">新しいAPIキー</label><input id="llm-api-key" type="password" autoComplete="new-password" value={draft.apiKey} onChange={event => edit({ apiKey: event.target.value })} /></>}
         <small>APIキーはサーバーの非公開ファイルに平文で保存し、OSのアクセス権で制限します。ブラウザには保存しません。</small>
+        {draft.provider === 'openai' && <label className="thinking-option"><input type="checkbox" checked={Boolean(draft.disableThinking)} onChange={event => edit({ disableThinking: event.target.checked })} />対応モデルの思考モードを無効にする（enable_thinking）</label>}
       </fieldset>
       {result && <div className="llm-checks" role="status">{result.checks.map(check => <span key={check}><Check size={15} />{check}</span>)}</div>}
       <div className="llm-form-actions"><button className="button secondary" type="button" disabled={disabled || !draft.baseUrl.trim()} onClick={() => void run('models')}><RefreshCw size={15} />モデル一覧を取得</button><button className="button secondary" type="submit" disabled={disabled}>{running === 'test' ? '接続を確認しています' : '接続をテスト'}</button><button className="button primary" type="button" disabled={disabled || !result} onClick={() => void run('save')}>保存して適用</button>{running && running !== 'save' && <button className="button secondary" type="button" onClick={() => controller.current?.abort()}>接続確認を中止</button>}</div>
       <button className="settings-reload" type="button" disabled={disabled} onClick={() => void load()}>適用中の設定を再読み込み</button>
     </form>}
+    <SpeechSettings active={active} locked={disabled} onBusy={onBusy} refresh={refresh} />
+    <MeetingHistory active={active} />
   </section>;
 }

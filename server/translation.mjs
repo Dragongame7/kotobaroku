@@ -2,6 +2,7 @@ import { SentenceBuffer, SENTENCE_MODES, sentenceState, continuesPrevious } from
 import { translationProfile, translationRequest } from './translation-models.mjs';
 import { correctJapanese, validateCorrectionMode, japaneseTokenizer, correctionCandidates } from './correction.mjs';
 import { modelPlacement } from './llm-client.mjs';
+import { snapshotSpeech } from './speaker-segments.mjs';
 export const translationDirections = { 'ja-JP': 'en-US', 'en-US': 'ja-JP' };
 const names = { 'ja-JP': 'Japanese', 'en-US': 'English' };
 const encoder = new TextEncoder();
@@ -116,22 +117,27 @@ export class LiveTranslation {
   }
   async warm() {
     this.emit({ type: 'translation.preparing' });
+    if (!this.translateEnabled && this.correctionMode === 'off') { this.emit({ type: 'translation.ready', boundaryMode: 'rules', notice: '話者付き原文を表示します。' }); return; }
     if (this.correctionMode === 'conservative' && this.sourceLanguage === 'ja-JP') { await japaneseTokenizer(); await correctionCandidates('準備'); }
     await warmTranslation(this);
     this.residency = await modelPlacement(this);
     const notice = this.residency.placement === 'mixed' ? 'LLMはCPU併用で動作しています。' : this.residency.placement === 'unknown' ? 'LLMのGPU配置を確認できませんでした。' : 'LLMはGPUで動作しています。';
     this.emit({ type: 'translation.ready', model: this.model, boundaryModel: this.model, boundaryMode: this.boundaryMode, sentenceMode: this.sentenceMode, correctionMode: this.correctionMode, residency: this.residency, notice, sourceLanguage: this.sourceLanguage, targetLanguage: this.targetLanguage });
   }
-  enqueue(text) {
+  enqueue(text, metadata = {}) {
     if (this.inputDone || this.signal.aborted) return;
-    this.sentences.push(text);
+    if (metadata.speaker) {
+      const previous = this.sentences.parts.at(-1)?.speaker;
+      if (previous && (previous.speakerId !== metadata.speaker.speakerId || previous.sessionId !== metadata.speaker.sessionId || !metadata.speaker.speakerId)) this.sentences.flush('speaker-change', false);
+    }
+    this.sentences.push(text, metadata);
     if (this.paused) this.sentences.flush('canceled');
     this.updateQueue();
   }
   activity() { if (!this.paused && !this.inputDone) this.sentences.activity(); }
   publish(snapshot, status) {
     const previous = this.rows.get(snapshot.id);
-    const segment = { ...previous, ...snapshot, schemaVersion: 2, rawSource: snapshot.source, sourceLanguage: this.sourceLanguage, targetLanguage: this.targetLanguage, model: this.model, modelDigest: this.residency?.digest, profile: translationProfile(this.model), promptVersion: 'translation-v3', boundaryModel: this.model, boundaryMode: this.boundaryMode, sentenceMode: this.sentenceMode, translation: previous?.translation || '', status, error: undefined };
+    const segment = { ...previous, ...snapshot, ...snapshotSpeech(snapshot.sourceParts || []), schemaVersion: 3, rawSource: snapshot.source, sourceLanguage: this.sourceLanguage, targetLanguage: this.targetLanguage, model: this.model, modelDigest: this.residency?.digest, profile: translationProfile(this.model), promptVersion: 'translation-v3', boundaryModel: this.model, boundaryMode: this.boundaryMode, sentenceMode: this.sentenceMode, translation: previous?.translation || '', status, error: undefined };
     delete segment.candidates;
     if (status === 'assembling') segment.provisional = true;
     this.rows.set(segment.id, segment);
@@ -189,7 +195,7 @@ export class LiveTranslation {
               timing.completedAt = Date.now();
               this.rows.set(segment.id, { ...segment, ...result, translation: result.text, timing, status: segment.provisional ? 'draft' : 'done' });
               this.emit({ type: 'translation.completed', id: segment.id, revision: segment.revision, provisional: segment.provisional, ...result, timing });
-              if (!segment.provisional) { this.history.push({ source: translationInput.text, translation: result.text }); this.history = this.history.slice(-2); }
+              if (!segment.provisional) { this.history.push({ source: translationInput.text, translation: result.text, ...(segment.speaker ? { speaker: segment.speaker } : {}) }); this.history = this.history.slice(-2); }
             }
           }
         } catch (error) {

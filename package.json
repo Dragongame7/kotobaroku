@@ -1,6 +1,6 @@
 {
   "name": "kotoba-nemotron-web",
-  "version": "0.4.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -24,7 +24,9 @@
     "test:gemma": "node scripts/smoke-gemma.mjs",
     "test:long": "node scripts/smoke-long-session.mjs",
     "test:caption-latency": "node scripts/smoke-caption-latency.mjs",
-    "test:gemma-readiness": "node scripts/check-gemma.mjs"
+    "test:gemma-readiness": "node scripts/check-gemma.mjs",
+    "start:gateway": "node spark-gateway/index.mjs",
+    "setup:diarization": "node scripts/setup-diarization.mjs"
   },
   "dependencies": {
     "express": "^5.1.0",

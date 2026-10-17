@@ -4,11 +4,13 @@ import path from 'node:path';
 import { createApplication } from '../server/app.mjs';
 import { findNemo, reachable, root } from './runtime.mjs';
 import { LlmSettings } from '../server/llm-settings.mjs';
+import { SpeechSettings } from '../server/speech-settings.mjs';
 
 process.chdir(root);
 try { process.loadEnvFile(); } catch (error) { if (error.code !== 'ENOENT') throw error; }
 const owned = new Set();
-const asrUrl = process.env.ASR_URL || 'http://127.0.0.1:8081';
+const speech = new SpeechSettings({ file: path.join(root, '.local', 'speech-settings.json') });
+const asrUrl = speech.current.baseUrl;
 const llm = new LlmSettings({ file: path.join(root, '.local', 'llm-settings.json') });
 const ollamaUrl = llm.current.baseUrl;
 if (!existsSync(path.join(root, 'dist', 'index.html'))) { console.error('先に npm run build を実行してください。'); process.exit(1); }
@@ -22,11 +24,11 @@ function launch(command, args, label, env = process.env) {
   return child;
 }
 
-if (!(await reachable(`${asrUrl}/ready`))) {
+if (!speech.error && speech.current.mode === 'local' && !(await reachable(`${asrUrl}/ready`))) {
   const nemo = findNemo();
   const url = new URL(asrUrl);
   if (nemo && ['127.0.0.1', 'localhost'].includes(url.hostname)) {
-    launch(nemo, ['serve', '--asr-model', process.env.ASR_MODEL || 'nemotron-3.5', '--device', process.env.ASR_DEVICE || 'cuda', '--host', '127.0.0.1', '--port', url.port || '8081', '--no-ui', '--read-timeout', '3600', '--asr.streaming.rnnt_right_context', '3', '--asr.endpointing.enable=true', '--asr.batching.state_arena_slots', '2'], '音声認識');
+    launch(nemo, ['serve', '--asr-model', process.env.ASR_MODEL || 'nemotron-3.5', ...(speech.current.diarization ? ['--diar-model', process.env.DIARIZATION_MODEL || 'nemotron-3-diarization', '--asr.diar.preset', 'v3-streaming'] : []), '--device', process.env.ASR_DEVICE || 'cuda', '--host', '127.0.0.1', '--port', url.port || '8081', '--no-ui', '--read-timeout', '3600', '--max-upload-mb', '1024', '--asr.streaming.rnnt_right_context', '3', '--asr.endpointing.enable=true', '--asr.batching.state_arena_slots', '2'], '音声認識');
   } else console.warn('音声認識が未接続です。npm run setup:asr で導入してください。');
 }
 if (!llm.error && llm.current.provider === 'ollama' && !(await reachable(`${ollamaUrl}/api/tags`))) {

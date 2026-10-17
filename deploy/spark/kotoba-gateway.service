@@ -1,0 +1,17 @@
+[Unit]
+Description=Kotoba authenticated Spark gateway
+After=network-online.target kotoba-speech.service docker.service
+
+[Service]
+Type=simple
+User=kotoba
+WorkingDirectory=/opt/kotoba
+EnvironmentFile=/opt/kotoba/deploy/spark/spark.env
+ExecStart=/usr/bin/node spark-gateway/index.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

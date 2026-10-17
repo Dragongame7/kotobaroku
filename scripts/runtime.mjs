@@ -9,7 +9,7 @@ export function findNemo() {
   const search = folder => {
     for (const entry of readdirSync(folder, { withFileTypes: true })) {
       const target = path.join(folder, entry.name);
-      if (entry.isFile() && entry.name === 'nemo-speech.exe') return target;
+      if (entry.isFile() && entry.name === (process.platform === 'win32' ? 'nemo-speech.exe' : 'nemo-speech')) return target;
       if (entry.isDirectory()) { const result = search(target); if (result) return result; }
     }
     return null;

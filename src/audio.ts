@@ -26,14 +26,18 @@ export class MicrophoneCapture {
   constructor(private callbacks: { event: (event: SpeechEvent) => void; level: (level: number) => void; disconnected: () => void }) {}
 
   async start(deviceId: string, language: string, translation?: { model: string; targetLanguage: string; boundaryMode?: 'llm' | 'rules'; sentenceMode?: 'speed' | 'balanced' | 'context'; correctionMode?: 'off' | 'conservative' }, captions?: { correctionMode: 'off' | 'conservative' }) {
+    const settingsResponse = await fetch('/api/speech/settings', { signal: AbortSignal.timeout(5000) });
+    if (!settingsResponse.ok) throw new Error('音声接続設定を取得できません。画面を再読み込みしてください。');
+    const speechSettings = await settingsResponse.json();
     this.translating = Boolean(translation);
-    this.processingCaptions = Boolean(translation || captions && captions.correctionMode !== 'off' && language === 'ja-JP');
+    this.processingCaptions = Boolean(translation || speechSettings.diarization || captions && captions.correctionMode !== 'off' && language === 'ja-JP');
     if (this.processingCaptions) {
       this.translationDone = new Promise<void>((resolve, reject) => { this.resolveTranslation = resolve; this.rejectTranslation = reject; });
       void this.translationDone.catch(() => {});
     }
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: deviceId ? { exact: deviceId } : undefined, channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      const browserProcessing = speechSettings.inputProfile !== 'conference';
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: deviceId ? { exact: deviceId } : undefined, channelCount: 1, echoCancellation: browserProcessing, noiseSuppression: browserProcessing, autoGainControl: browserProcessing } });
       if (this.closing) throw new Error('録音を中止しました。');
       this.context = new AudioContext();
       this.sampleRate = this.context.sampleRate;

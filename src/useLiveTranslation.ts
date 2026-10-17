@@ -3,16 +3,18 @@ import { MicrophoneCapture, type SpeechEvent } from './audio';
 import type { TranslationSettings } from './TranslationComparison';
 import { correctionLabel, type Correction, type CorrectionMode } from './corrections';
 import type { Caption } from './translation-types';
+import { speakerPrefix } from './SpeakerLabel';
 export type TranslationProps = { correctionMode: CorrectionMode; setCorrectionMode: (value: CorrectionMode) => void; device: string; language: string; setLanguage: (value: string) => void; model: string; settings?: TranslationSettings; ready: boolean; locked: boolean; onBusy: (busy: boolean) => void; refresh: () => void; resetKey: number };
 function savedCaptions(): Caption[] { try { const saved = JSON.parse(localStorage.getItem('kotoba.translation') || '[]'); return Array.isArray(saved) ? saved.filter(item => typeof item?.id === 'string' && typeof item.source === 'string' && typeof item.translation === 'string').map(item => ({ ...item, correction: item.correction?.status === 'pending' ? { ...item.correction, status: 'canceled' } : item.correction, status: ['assembling', 'draft', 'queued', 'translating'].includes(item.status) ? 'canceled' : item.status })) : []; } catch { return []; } }
 export const labels = { assembling: '続きを待っています', draft: '仮訳 · 続きを待っています', queued: '翻訳待ち', translating: '翻訳中', done: '確定', error: '失敗', canceled: '中断' };
 export const sentenceModes = { speed: { label: '速度重視', seconds: 6, chars: 100 }, balanced: { label: 'バランス重視', seconds: 10, chars: 150 }, context: { label: '文脈重視', seconds: 15, chars: 200 } };
 export type SentenceMode = keyof typeof sentenceModes;
 function savedSentenceMode(): SentenceMode { try { const value = localStorage.getItem('kotoba.sentence-mode') || ''; return Object.hasOwn(sentenceModes, value) ? value as SentenceMode : 'balanced'; } catch { return 'balanced'; } }
-export function boundaryLabel(boundary?: string) { return boundary === 'time' ? '待ち時間の上限で区切りました。' : boundary === 'length' ? '文字数の上限で区切りました。' : boundary === 'limit' ? '長文のため途中で区切りました。' : ''; }
+export function boundaryLabel(boundary?: string) { return boundary === 'speaker-change' ? '話者の交代で区切りました。' : boundary === 'time' ? '待ち時間の上限で区切りました。' : boundary === 'length' ? '文字数の上限で区切りました。' : boundary === 'limit' ? '長文のため途中で区切りました。' : ''; }
 
 export function useLiveTranslation({ correctionMode, device, language, model: generalModel, settings, ready, locked, onBusy, refresh, resetKey }: TranslationProps) {
   const [rows, setRows] = useState<Caption[]>(savedCaptions);
+  const [diarization, setDiarization] = useState(false);
   const [phase, setPhase] = useState<'idle' | 'connecting' | 'recording' | 'stopping' | 'draining'>('idle');
   const [partial, setPartial] = useState('');
   const [partialSegmentId, setPartialSegmentId] = useState<string | null>(null);
@@ -42,7 +44,11 @@ export function useLiveTranslation({ correctionMode, device, language, model: ge
   const sentenceSettings = sentenceModes[sentenceMode];
   useEffect(() => { try { localStorage.setItem('kotoba.sentence-mode', sentenceMode); } catch { /* Preference persistence is optional. */ } }, [sentenceMode]);
 
-  useEffect(() => { const timer = setTimeout(() => { try { localStorage.setItem('kotoba.translation', JSON.stringify(rows)); setStorageError(false); } catch { setStorageError(true); } }, 350); return () => clearTimeout(timer); }, [rows]);
+  useEffect(() => {
+    const persist = () => { try { localStorage.setItem('kotoba.translation', JSON.stringify(rows)); setStorageError(false); } catch { setStorageError(true); } };
+    const timer = setTimeout(persist, 350); window.addEventListener('pagehide', persist);
+    return () => { clearTimeout(timer); window.removeEventListener('pagehide', persist); };
+  }, [rows]);
   useEffect(() => { if (previousReset.current !== resetKey) { setRows([]); setPartial(''); setError(''); previousReset.current = resetKey; } }, [resetKey]);
   useEffect(() => { if (phase !== 'recording') return; const timer = setInterval(() => setSeconds(value => value + 1), 1000); return () => clearInterval(timer); }, [phase]);
   useEffect(() => () => { recorder.current?.dispose(); retry.current?.abort(); }, []);
@@ -51,6 +57,7 @@ export function useLiveTranslation({ correctionMode, device, language, model: ge
   function update(id: string, changes: Partial<Caption>) { setRows(current => current.map(row => row.id === id ? { ...row, ...changes } : row)); }
   function receive(event: SpeechEvent, session: string) {
     const id = `${session}:${event.id}`;
+    if (event.type === 'meeting.started') { setDiarization(Boolean(event.diarization)); return; }
     if (event.type === 'conversation.item.input_audio_transcription.delta') {
       const segmentId = event.translationSegmentId == null ? null : `${session}:${event.translationSegmentId}`;
       partialSpeech.current = { text: partialSpeech.current.text + (event.delta || ''), id: segmentId, session };
@@ -145,7 +152,7 @@ export function useLiveTranslation({ correctionMode, device, language, model: ge
     try {
       const index = rows.findIndex(item => item.id === row.id);
       const context = rows.slice(0, index).filter(item => item.status === 'done' && item.sourceLanguage === row.sourceLanguage && item.targetLanguage === row.targetLanguage).slice(-2).map(item => ({ ...item, source: item.translationInput?.text || item.source }));
-      const response = await fetch('/api/translate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal, body: JSON.stringify({ text: row.rawSource || row.source, sourceLanguage: row.sourceLanguage, targetLanguage: row.targetLanguage, model, context, correctionMode: modeOverride || correctionMode, correctionContext: rows.slice(0, index).slice(-2).map(item => item.rawSource || item.source) }) });
+      const response = await fetch('/api/translate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal, body: JSON.stringify({ ...(row.sessionId ? { sessionId: row.sessionId, segmentId: Number(row.id.split(':').at(-1)), inputRevision: row.revision } : {}), text: row.rawSource || row.source, sourceLanguage: row.sourceLanguage, targetLanguage: row.targetLanguage, model, context, correctionMode: modeOverride || correctionMode, correctionContext: rows.slice(0, index).slice(-2).map(item => item.rawSource || item.source) }) });
       if (!response.ok) throw new Error((await response.json()).error || '再試行を開始できません。');
       let buffer = '', output = '', done = false; const decoder = new TextDecoder(); const reader = response.body!.getReader();
       const consume = (line: string) => {
@@ -159,13 +166,13 @@ export function useLiveTranslation({ correctionMode, device, language, model: ge
     } catch (reason) { update(row.id, { status: controller.signal.aborted ? 'canceled' : 'error', error: controller.signal.aborted ? '翻訳を中断しました。' : (reason as Error).message }); }
     finally { setRetryId(null); retry.current = null; onBusy(false); refresh(); }
   }
-  function transcript() { return rows.map(row => `${row.sourceLanguage === 'ja-JP' ? '日本語 → English' : 'English → 日本語'} · ${row.model}\n${row.rawSource || row.source}${row.correction?.status === 'applied' ? `\n補正後: ${row.correction.correctedSource}\n変更: ${row.correction.edits.map(edit => `${edit.from} → ${edit.to}`).join(', ')}` : ''}\n${correctionLabel(row.correction)}${row.translationInput ? ` · 翻訳入力: ${row.translationInput.origin === 'corrected' ? '補正後' : '原文'}` : ''}\n${row.translation}${row.status === 'done' ? '' : `\n（${labels[row.status]}${row.translation && row.provisional && row.status !== 'draft' ? '・仮訳' : ''}）`}${boundaryLabel(row.boundary) ? `\n（${boundaryLabel(row.boundary)}）` : ''}`).join('\n\n'); }
+  function transcript() { return rows.map(row => `${speakerPrefix(row) ? speakerPrefix(row) + "\n" : ""}${row.sourceLanguage === 'ja-JP' ? '日本語 → English' : 'English → 日本語'} · ${row.model}\n${row.rawSource || row.source}${row.correction?.status === 'applied' ? `\n補正後: ${row.correction.correctedSource}\n変更: ${row.correction.edits.map(edit => `${edit.from} → ${edit.to}`).join(', ')}` : ''}\n${correctionLabel(row.correction)}${row.translationInput ? ` · 翻訳入力: ${row.translationInput.origin === 'corrected' ? '補正後' : '原文'}` : ''}\n${row.translation}${row.status === 'done' ? '' : `\n（${labels[row.status]}${row.translation && row.provisional && row.status !== 'draft' ? '・仮訳' : ''}）`}${boundaryLabel(row.boundary) ? `\n（${boundaryLabel(row.boundary)}）` : ''}`).join('\n\n'); }
   async function copy() { try { await navigator.clipboard.writeText(transcript()); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { setError('コピーできません。本文を選択してコピーしてください。'); } }
   function save() {
     const url = URL.createObjectURL(new Blob([`# リアルタイム翻訳\n\n${transcript()}\n`], { type: 'text/markdown;charset=utf-8' }));
     const link = document.createElement('a'); link.href = url; link.download = `ことば録-翻訳-${new Date().toISOString().slice(0, 10)}.md`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  return { rows, phase, partial, partialSegmentId, pending, paused, seconds, level, error, storageError, copied, retryId, boundaryMode, setBoundaryMode, sentenceMode, setSentenceMode, boundaryNotice, active, busy, options, model, judge, sentenceSettings, sourceLanguage, targetLanguage, start, cancelPreparation, stop, retryCaption, copy, save, cancelTranslation: () => recorder.current?.cancelTranslation(), cancelRetry: () => retry.current?.abort(), comparisonBusy: (value: boolean) => { setComparing(value); onBusy(value); if (!value) refresh(); }, clear: () => { if (!busy && !locked) { setRows([]); setPartial(''); setError(''); } } };
+  return { rows, diarization, phase, partial, partialSegmentId, pending, paused, seconds, level, error, storageError, copied, retryId, boundaryMode, setBoundaryMode, sentenceMode, setSentenceMode, boundaryNotice, active, busy, options, model, judge, sentenceSettings, sourceLanguage, targetLanguage, start, cancelPreparation, stop, retryCaption, copy, save, cancelTranslation: () => recorder.current?.cancelTranslation(), cancelRetry: () => retry.current?.abort(), comparisonBusy: (value: boolean) => { setComparing(value); onBusy(value); if (!value) refresh(); }, clear: () => { if (!busy && !locked) { setRows([]); setPartial(''); setError(''); } } };
 }
 export type TranslationController = ReturnType<typeof useLiveTranslation>;

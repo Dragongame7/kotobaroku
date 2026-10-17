@@ -1,3 +1,4 @@
+import { sliceSpeechPart } from './speaker-segments.mjs';
 export const MAX_SENTENCE_BYTES = 1200;
 export const SENTENCE_MODES = Object.freeze({
   speed: { maxWaitMs: 6000, maxChars: 100, softChars: 55 },
@@ -92,11 +93,14 @@ export class SentenceBuffer {
     if (!this.current) this.current = ++this.sequence;
     this.revision++; this.update(this.snapshot());
   }
-  push(text) {
+  push(text, metadata = {}) {
     if (this.closed || !text.trim()) return;
     const source = this.source();
     const separator = source && (this.language === 'en-US' || /[a-z0-9]$/iu.test(source) && /^[a-z0-9]/iu.test(text.trim())) ? ' ' : '';
-    this.parts.push({ utteranceId: ++this.utterance, text: separator + text.trim(), receivedAt: Date.now() });
+    const leading = text.length - text.trimStart().length;
+    const { source: _source, ...speechMetadata } = metadata;
+    const spans = metadata.speechSpans?.map(span => ({ ...span, sourceStart: Math.max(0, span.sourceStart - leading + separator.length), sourceEnd: Math.min(separator.length + text.trim().length, span.sourceEnd - leading + separator.length) }));
+    this.parts.push({ ...speechMetadata, ...(spans ? { speechSpans: spans } : {}), utteranceId: metadata.utteranceId || ++this.utterance, text: separator + text.trim(), receivedAt: Date.now() });
     this.publish();
     // A Japanese full stop is an explicit user-facing sentence boundary.
     // Commit it immediately, including after a conjunction; only text without
@@ -193,7 +197,7 @@ export class SentenceBuffer {
     let remaining = end;
     for (const part of this.parts) {
       if (remaining >= part.text.length) { head.push(part); remaining -= part.text.length; }
-      else if (remaining > 0) { head.push({ ...part, text: part.text.slice(0, remaining) }); tail.push({ ...part, text: part.text.slice(remaining) }); remaining = 0; }
+      else if (remaining > 0) { head.push(sliceSpeechPart(part, 0, remaining)); tail.push(sliceSpeechPart(part, remaining, part.text.length)); remaining = 0; }
       else tail.push(part);
     }
     this.revision++;
@@ -202,13 +206,13 @@ export class SentenceBuffer {
     if (this.source().trim()) { this.publish(); this.schedule(); }
     else this.parts = [];
   }
-  flush(boundary = 'stop') {
+  flush(boundary = 'stop', close = true) {
     while (this.parts.length) {
       const source = this.source();
       const candidate = completeCandidate(this.snapshot(), this.language);
       this.cut(candidate?.end || source.length, candidate ? 'sentence' : boundary);
     }
-    if (boundary !== 'canceled') this.close();
+    if (boundary !== 'canceled' && close) this.close();
   }
   close() {
     this.closed = true; this.clearTimers();

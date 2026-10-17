@@ -3,6 +3,7 @@ import { ArrowUp, Check, Copy, Download, Mic, Square, X, Maximize, Minimize } fr
 import type { TranslationController, TranslationProps } from './useLiveTranslation';
 import type { Caption } from './translation-types';
 import type { CorrectionMode } from './corrections';
+import SpeakerLabel from './SpeakerLabel';
 
 type Props = TranslationProps & { controller: TranslationController; devices: MediaDeviceInfo[]; setDevice: (value: string) => void; openDetails: () => void; openSettings: () => void };
 const languageName = (language: string) => language === 'en-US' ? '英語' : '日本語';
@@ -146,9 +147,9 @@ export default function LiveTranslation({ controller: c, devices, device, setDev
       <div className="live-history" ref={viewport} tabIndex={0} aria-label="会話の履歴 · 新しい会話が上" onScroll={() => { if (layoutChanging.current || fullscreen !== (document.fullscreenElement === root.current)) return; following.current = viewport.current!.scrollTop <= 24; if (following.current) setUnread(0); rememberPosition(); }}>
         <div ref={content}>
           {!c.rows.length && !c.partial && <div className="live-empty"><Mic size={30} strokeWidth={1.3} /><h2>話したことの、すぐとなりに。</h2><p>言語を選んで「翻訳を開始」を押してください。<br />話のまとまりに合わせて訳文が届きます。</p></div>}
-          {standalonePartial && <article className="live-pair latest" data-row-id="receiving"><div className="live-source"><span className="live-row-label">今、話していること · {languageName(c.sourceLanguage)}</span><p>{c.partial}</p></div><div className="live-target"><span className="live-row-label">話のまとまりを待っています</span></div></article>}
+          {standalonePartial && <article className="live-pair latest" data-row-id="receiving"><div className="live-source"><span className="live-row-label">今、話していること{c.diarization ? ' · 話者判定待ち' : ''} · {languageName(c.sourceLanguage)}</span><p>{c.partial}</p></div><div className="live-target"><span className="live-row-label">話のまとまりを待っています</span></div></article>}
           {[...c.rows].reverse().map((row, index) => <article key={row.id} className={`live-pair ${index === 0 && !standalonePartial ? 'latest' : ''}`} data-row-id={row.id} data-status={row.status}>
-            <div className="live-source"><span className="live-row-label">{partialRow === row && c.partial ? '今、話していること' : index === 0 && !standalonePartial ? '新しい会話' : '話したこと'} · {languageName(row.sourceLanguage)}</span><p>{row.rawSource || row.source}{partialRow === row && c.partial && <span className="live-partial">{row.sourceLanguage === 'en-US' ? ' ' : ''}{c.partial}</span>}</p></div>
+            <div className="live-source"><SpeakerLabel row={row} /><span className="live-row-label">{partialRow === row && c.partial ? '今、話していること' : index === 0 && !standalonePartial ? '新しい会話' : '話したこと'} · {languageName(row.sourceLanguage)}</span><p>{row.rawSource || row.source}{partialRow === row && c.partial && <span className="live-partial">{row.sourceLanguage === 'en-US' ? ' ' : ''}{c.partial}</span>}</p></div>
             <div className="live-target"><span className="live-row-label">{rowStatus(row)} · {languageName(row.targetLanguage)}</span><p>{row.translation || (row.status === 'assembling' ? '話のまとまりに合わせて翻訳します。' : row.status === 'queued' ? '順番に翻訳しています。' : row.status === 'translating' ? '訳文が届くまでお待ちください。' : '訳文はまだありません。')}</p>{row.provisional && row.translation && <small>続きに合わせて訳文が変わることがあります。</small>}{['error', 'canceled'].includes(row.status) && <button className="button secondary" disabled={disabled} onClick={() => void c.retryCaption(row)}>この文を再試行</button>}</div>
           </article>)}
         </div>

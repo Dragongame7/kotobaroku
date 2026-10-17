@@ -1,0 +1,18 @@
+[Unit]
+Description=Kotoba ASR and Nemotron 3 Diarization
+After=network-online.target
+
+[Service]
+Type=simple
+User=kotoba
+WorkingDirectory=/opt/kotoba
+EnvironmentFile=/opt/kotoba/deploy/spark/spark.env
+ExecStart=/usr/bin/node scripts/start-spark-speech.mjs
+Restart=on-failure
+RestartSec=5
+KillMode=mixed
+TimeoutStopSec=20
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

@@ -11,18 +11,18 @@ export function validateConnection(input) {
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash || /\/(chat\/completions|api\/chat|models)$/.test(url.pathname)) throw new Error('HTTP/HTTPSのベースURLを入力してください。認証情報や個別APIのパスは含めないでください。');
   if (typeof input.model !== 'string' || !/^[\w./:-]{1,120}$/.test(input.model)) throw new Error('接続先が公開するモデル名を入力してください。');
   if (input.apiKey !== undefined && (typeof input.apiKey !== 'string' || input.apiKey.length > 4096 || /[\r\n]/.test(input.apiKey))) throw new Error('APIキーの形式が正しくありません。');
-  return { provider: input.provider, baseUrl: url.href.replace(/\/+$/, ''), model: input.model, apiKey: input.apiKey || '' };
+  return { provider: input.provider, baseUrl: url.href.replace(/\/+$/, ''), model: input.model, apiKey: input.apiKey || '', ...(input.disableThinking === true ? { disableThinking: true } : {}) };
 }
 
 export function environmentConnection(env = process.env) {
   if (env.LLM_PROVIDER || env.LLM_BASE_URL || env.LLM_MODEL || env.LLM_API_KEY) {
     if (!env.LLM_PROVIDER || !env.LLM_BASE_URL || !env.LLM_MODEL) throw new Error('LLM_PROVIDER・LLM_BASE_URL・LLM_MODELを一組で指定してください。');
-    return { ...validateConnection({ provider: env.LLM_PROVIDER, baseUrl: env.LLM_BASE_URL, model: env.LLM_MODEL, apiKey: env.LLM_API_KEY }), origin: 'environment' };
+    return { ...validateConnection({ provider: env.LLM_PROVIDER, baseUrl: env.LLM_BASE_URL, model: env.LLM_MODEL, apiKey: env.LLM_API_KEY, disableThinking: env.LLM_DISABLE_THINKING === 'true' }), origin: 'environment' };
   }
   return { ...validateConnection({ provider: 'ollama', baseUrl: ollamaBaseUrl(env), model: configuredModel(env) }), origin: env.OLLAMA_URL || env.OLLAMA_HOST || env.OLLAMA_MODEL ? 'legacy' : 'default' };
 }
 
-function restrict(file, directory = false) {
+export function restrict(file, directory = false) {
   if (process.platform === 'win32') {
     const account = execFileSync('whoami', [], { encoding: 'utf8', windowsHide: true }).trim();
     execFileSync('icacls', [file, '/inheritance:r', '/grant:r', `${account}:${directory ? '(OI)(CI)' : ''}F`], { stdio: 'ignore', windowsHide: true });

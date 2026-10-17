@@ -5,6 +5,7 @@ import Comparison from './Comparison';
 import Translation from './Translation';
 import LiveTranslation from './LiveTranslation';
 import Settings from './Settings';
+import SpeakerLabel, { speakerPrefix } from './SpeakerLabel';
 import { useLiveTranslation } from './useLiveTranslation';
 import type { TranslationSettings } from './TranslationComparison';
 import type { AudioClip } from './wav';
@@ -109,7 +110,7 @@ export default function App() {
 
   useEffect(() => { void refresh(); void listDevices(); const timer = setInterval(() => void refresh(), 15000); navigator.mediaDevices?.addEventListener('devicechange', listDevices); return () => { clearInterval(timer); navigator.mediaDevices?.removeEventListener('devicechange', listDevices); capture.current?.dispose(); request.current?.abort(); }; }, [refresh, listDevices]);
   useEffect(() => { if (!recording) return; const timer = setInterval(() => setSeconds(value => value + 1), 1000); return () => clearInterval(timer); }, [recording]);
-  useEffect(() => { try { localStorage.setItem('kotoba.draft', JSON.stringify({ schemaVersion: 2, id: sessionId.current, text, output, mode: resultMode, captions, recordedOriginal, resultInput, useCorrected })); } catch { setNotice('ブラウザの保存容量が不足しています。テキストを保存してください。'); } }, [text, output, resultMode, captions, recordedOriginal, resultInput, useCorrected]);
+  useEffect(() => { try { localStorage.setItem('kotoba.draft', JSON.stringify({ schemaVersion: 3, id: sessionId.current, text, output, mode: resultMode, captions, recordedOriginal, resultInput, useCorrected })); } catch { setNotice('ブラウザの保存容量が不足しています。テキストを保存してください。'); } }, [text, output, resultMode, captions, recordedOriginal, resultInput, useCorrected]);
   useEffect(() => {
     if (compareMode || translationMode || (recordState === 'idle' && previousRecordState.current === 'idle') || (!text && !partial)) return;
     if (originalInput.current) originalInput.current.scrollTop = originalInput.current.scrollHeight;
@@ -185,10 +186,13 @@ export default function App() {
     if (locked || !text.trim()) return;
     setError(''); setNotice(''); setProcessing(true); setOutput(''); setResultMode(mode);
     const controller = request.current = new AbortController();
-    const input = useCorrected ? correctedText : text; setResultInput(useCorrected ? '補正後' : '原文');
+    const input = useCorrected ? correctedText : text;
+    const attributed = captions.map(row => ({ id: row.id, speaker: speakerPrefix(row) || '話者未記録', text: useCorrected ? row.correction?.correctedSource || row.rawSource || row.source : row.rawSource || row.source }));
+    const attribution = captions.some(row => row.speaker) && !captions.some(row => row.stale) && attributed.map(row => row.text).join('').replace(/\s/gu, '') === input.replace(/\s/gu, '') ? attributed : undefined;
+    setResultInput(useCorrected ? '補正後' : '原文');
     let result = '';
     try {
-      const response = await fetch('/api/process', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal, body: JSON.stringify({ text: input, mode, model }) });
+      const response = await fetch('/api/process', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal, body: JSON.stringify({ text: input, mode, model, attribution }) });
       if (!response.ok) { const data = await response.json(); throw new Error(data.error || 'AI処理を開始できません。'); }
       const reader = response.body!.getReader(); const decoder = new TextDecoder(); let buffer = ''; let done = false;
       const consume = (line: string) => {
@@ -223,7 +227,7 @@ export default function App() {
   function newSession() { saveSession(); setTranslationReset(value => value + 1); sessionId.current = crypto.randomUUID(); setText(''); setRecordedOriginal(''); setCaptions([]); setOutput(''); setPartial(''); setSeconds(0); setError(''); setNotice(''); setAudioClip(null); }
   function loadSession(entry: SavedSession) { saveSession(); navigate(''); sessionId.current = entry.id; setText(entry.text); setRecordedOriginal(entry.recordedOriginal || entry.text); setCaptions(entry.captions || []); setResultInput(entry.resultInput || '原文'); setOutput(entry.output); setResultMode(entry.mode); setMode(entry.mode); setPartial(''); setSeconds(0); setError(''); setNotice(''); }
   async function copy(value: string, key: string) { try { await navigator.clipboard.writeText(value); setCopied(key); setTimeout(() => setCopied(''), 1800); } catch { setError('コピーできません。本文を選択してコピーしてください。'); } }
-  function download() { saveSession(); const content = `# 文字起こし\n\n${recordedOriginal || text}${recordedOriginal && recordedOriginal !== text ? `\n\n# 編集中の原文\n\n${text}` : ''}${captions.length ? `\n\n# 補正後\n\n${correctedText}\n\n${captions.map(row => `${row.stale ? '手編集により現在の原稿へは未適用' : correctionLabel(row.correction)}: ${row.correction?.edits.map(edit => `${edit.from} → ${edit.to}`).join(', ') || '変更なし'}`).join('\n')}` : ''}${output ? `\n\n# ${resultMode === 'cleanup' ? '整形した文章' : '要約'}（入力: ${resultInput}）\n\n${output}` : ''}`; const url = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' })); const a = document.createElement('a'); a.href = url; a.download = `ことば録-${new Date().toISOString().slice(0, 10)}.md`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
+  function download() { saveSession(); const content = `# 文字起こし\n\n${recordedOriginal || text}${recordedOriginal && recordedOriginal !== text ? `\n\n# 編集中の原文\n\n${text}` : ''}${captions.length ? `\n\n# 補正後\n\n${correctedText}\n\n${captions.map(row => `${row.stale ? '手編集により現在の原稿へは未適用' : correctionLabel(row.correction)}: ${row.correction?.edits.map(edit => `${edit.from} → ${edit.to}`).join(', ') || '変更なし'}`).join('\n')}` : ''}${captions.some(row => row.speaker) ? `\n\n# 話者別の発言\n\n${captions.map(row => `${speakerPrefix(row)}\n${row.rawSource || row.source}`).join("\n\n")}` : ""}${output ? `\n\n# ${resultMode === 'cleanup' ? '整形した文章' : '要約'}（入力: ${resultInput}）\n\n${output}` : ''}`; const url = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' })); const a = document.createElement('a'); a.href = url; a.download = `ことば録-${new Date().toISOString().slice(0, 10)}.md`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
 
   return <div className={`app-shell ${liveMode || settingsMode ? 'live-shell' : ''}`}>
     <header className="topbar">
@@ -283,7 +287,7 @@ export default function App() {
           <div className="correction-heading"><h2>補正後の文章</h2><div className="correction-actions"><label><input type="checkbox" checked={useCorrected} onChange={event => setUseCorrected(event.target.checked)} disabled={locked} /> 整形・要約に補正後を使う</label><button className="button secondary" disabled={locked || !text.trim() || language === 'en-US'} onClick={() => void correctDraft()}>補正をやり直す</button><button className="button secondary" disabled={!correctedText} onClick={() => void copy(correctedText, 'corrected')}>補正後をコピー</button></div></div>
           <p className="comparison-note">認識原文はそのまま保持します。同じ読みの漢字語だけを検証して適用し、補正できない場合は原文を使います。単語登録はありません。</p>
           <div ref={correctedInput} className="corrected-document">{correctedText || '録音または原文の入力後に、文脈を使って補正します。'}</div>
-          <details><summary>原文・補正差分と処理状態（{captions.length}区間）</summary>{captions.map(row => <article key={row.id}><p>{row.rawSource || row.source}</p><small>{row.stale ? '手編集のため再補正が必要' : correctionLabel(row.correction)}</small>{row.correction?.edits.map((edit, index) => <p key={index}>{edit.from} → {edit.to}</p>)}</article>)}{recordedOriginal && recordedOriginal !== text && <pre>{recordedOriginal}</pre>}</details>
+          <details open={captions.some(row => Boolean(row.speaker))}><summary>話者別の発言・原文・補正差分と処理状態（{captions.length}区間）</summary>{captions.map(row => <article key={row.id}><SpeakerLabel row={row} /><p>{row.rawSource || row.source}</p><small>{row.stale ? '手編集のため再補正が必要' : correctionLabel(row.correction)}</small>{row.correction?.edits.map((edit, index) => <p key={index}>{edit.from} → {edit.to}</p>)}</article>)}{recordedOriginal && recordedOriginal !== text && <pre>{recordedOriginal}</pre>}</details>
         </section>}
         <footer className="workspace-footer"><span><Headphones size={14} /> 日本語も、英語も。あなたのペースで。</span><span>{liveMode ? '会話はこのブラウザに保存' : '文章はこのブラウザに保存 · 比較音声は一時保持'} <ChevronRight size={13} /></span></footer>
         </div>

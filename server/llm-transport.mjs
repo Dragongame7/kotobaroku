@@ -91,6 +91,7 @@ export function createLlmTransport(connection, fetcher = fetch) {
     const input = JSON.parse(options.body || '{}');
     const body = {
       model: input.model || snapshot.model,
+      ...(snapshot.disableThinking ? { chat_template_kwargs: { enable_thinking: false } } : {}),
       messages: input.messages?.length ? input.messages : [{ role: 'user', content: 'Reply only OK.' }],
       stream: Boolean(input.stream),
       ...(input.options?.temperature !== undefined ? { temperature: input.options.temperature } : {}),

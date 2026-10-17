@@ -337,3 +337,18 @@ textarea:focus-visible { outline-offset: -3px; border-radius: 0; }
   .llm-current { padding: 18px; }
   .llm-current dl { grid-template-columns: 80px minmax(0, 1fr); gap: 10px; font-size: 13px; }
 }
+.speech-settings, .meeting-history { margin-top: 36px; padding-top: 28px; border-top: 1px solid var(--border, #d9dfda); }
+.speech-settings > p, .meeting-history > p { line-height: 1.7; overflow-wrap: anywhere; }
+.speaker-label { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 9px; font-size: 13px; }
+.speaker-name { color: #315746; background: #edf3ee; border: 1px solid #cad9ce; border-radius: 5px; padding: 4px 8px; font: inherit; cursor: pointer; text-align: left; overflow-wrap: anywhere; max-width: 100%; }
+.speaker-name:disabled { cursor: default; color: #686c68; background: #f3f3ef; }
+.speaker-label small { color: #737970; font-size: 11px; }
+.speaker-label form { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; width: 100%; }
+.speaker-label label { display: grid; gap: 4px; min-width: 0; }
+.speaker-label input { max-width: 100%; min-width: 0; padding: 7px; border: 1px solid #b7c9bb; border-radius: 4px; font: inherit; }
+.meeting-list { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; max-height: 280px; overflow: auto; }
+.meeting-preview { margin-top: 20px; max-height: 640px; overflow: auto; padding: 15px; border: 1px solid #d9dfda; border-radius: 6px; }
+.meeting-preview article { padding: 16px 0; border-bottom: 1px solid #e0e4df; }
+.meeting-preview p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
+.llm-connection-form .thinking-option { display: flex; align-items: flex-start; gap: 8px; }
+.llm-connection-form input[type=checkbox] { width: auto; margin-top: 4px; }

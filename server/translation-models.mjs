@@ -25,7 +25,7 @@ export function translationRequest({ model, text, sourceLanguage, targetLanguage
   let contextBytes = 0;
   const history = [];
   for (const pair of context.slice(-2)) {
-    const value = JSON.stringify({ previousSource: pair.source, previousTranslation: pair.translation });
+    const value = JSON.stringify({ ...(pair.speaker ? { previousSpeaker: pair.speaker.speakerId || 'unknown' } : {}), previousSource: pair.source, previousTranslation: pair.translation });
     if (contextBytes + Buffer.byteLength(value) <= 1000) { contextBytes += Buffer.byteLength(value); history.push(value); }
   }
   let messages;
