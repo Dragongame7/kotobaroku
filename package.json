@@ -1,12 +1,15 @@
 {
   "name": "kotoba-nemotron-web",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
     "start": "node scripts/start.mjs",
+    "start:client": "node scripts/start-client.mjs",
+    "package:client": "node scripts/package-client.mjs",
+    "test:client-package": "node scripts/smoke-client-package.mjs",
     "server": "node server/index.mjs",
     "setup:asr": "node scripts/setup-asr.mjs",
     "setup:whisper": "node scripts/setup-whisper.mjs",

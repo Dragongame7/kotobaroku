@@ -1,0 +1,7 @@
+{
+  "gatewayUrl": "http://127.0.0.1:8001",
+  "model": "meeting-llm",
+  "port": 3210,
+  "inputProfile": "conference",
+  "disableThinking": false
+}

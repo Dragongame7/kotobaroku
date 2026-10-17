@@ -11,6 +11,11 @@ Other npm dependencies retain their licenses in `node_modules` and their
 upstream distributions. Nemotron, NeMo-Speech.cpp, Ollama, Gemma and the
 optional Whisper runtime/models retain their separate upstream terms.
 
+The portable Windows client bundles the Node.js 24.22.0 executable. Its
+complete upstream license and third-party notices are included in
+`runtime/LICENSE` inside the client ZIP. Production npm packages and the
+kuromoji dictionary retain their upstream license files in the ZIP.
+
 Optional v1.0 speech components are downloaded separately, not bundled here:
 
 - [NeMo-Speech.cpp v0.2.0](https://github.com/NVIDIA/NeMo-Speech.cpp/tree/v0.2.0): Apache License 2.0; see its upstream LICENSE and dependency notices.

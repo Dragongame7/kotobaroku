@@ -1,4 +1,4 @@
-# ことば録 v1.0.0
+# ことば録 v1.0.1
 
 マイク音声をNemotronで文字起こしし、設定した共通LLMで日本語補正、日英翻訳、文章整形、要約を行うWebアプリです。v1.0ではNemotron-3-Diarizationによる話者分離、話者名の変更、話者付きの翻訳・会議履歴を追加しました。
 
@@ -7,9 +7,17 @@
 既存のローカルASR・Ollama構成も利用できます。未設定では従来のローカル接続・話者分離OFFを維持します。Spark実機の接続先は未定で、GPU同居性能・3〜8人の話者精度・60分運転は未検証です。プロトコル・排他・保存はモックと結合試験で検証しています。
 
 
-## 起動
+## メンバーへの配布（Windows用ZIP）
 
-このPCではASRとOllamaを導入済みです。このディレクトリで次を実行し、[アプリ](http://127.0.0.1:3210/)を開きます。
+DGX接続用クライアントは、Node.jsと必要な依存物を含むZIPで配布できます。メンバーはGitHub Releasesから実行用ZIPを取得し、「すべて展開」→ `start-client.cmd` のダブルクリックで起動します。初回だけDGX接続設定を保存します。メンバー側のNode.js・GPU・AIモデルの個別導入は不要です。
+
+[Windows版のダウンロード](https://github.com/Dragongame7/kotobaroku/releases/latest)から `kotobaroku-バージョン-windows-x64.zip` を取得してください。DGX側のサービスは管理者が別途用意します。
+
+管理者向けのZIP作成、共通接続先の指定、GitHub Actionsと下書きRelease作成については[Windows配布手順](deploy/client/README.md)を参照してください。通常のソース取得用ZIPとは別に、`npm run package:client` で実行用ZIPを作成します。
+
+## ソースから起動
+
+開発用のソースから起動する場合は、このディレクトリで次を実行し、[アプリ](http://127.0.0.1:3210/)を開きます。ローカルAIを使う場合はASRとOllamaを別途導入します。
 
 ```powershell
 .\start.ps1

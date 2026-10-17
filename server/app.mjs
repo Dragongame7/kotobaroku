@@ -130,7 +130,7 @@ export function createApplication(options = {}) {
       defaultModel: snapshot.model,
       schemaVersion: 3, correction: { supported: true, defaultMode: 'conservative', languages: ['ja-JP'] }, deprecatedSettings: config.deprecatedSettings,
       llm: { ...settings, ready, models, residency: snapshot.provider === 'ollama' ? residency : { placement: 'unknown' } },
-      version: '1.0.0', runtime: { rss: process.memoryUsage().rss, heapUsed: process.memoryUsage().heapUsed },
+      version: '1.0.1', runtime: { rss: process.memoryUsage().rss, heapUsed: process.memoryUsage().heapUsed },
       translation: { ...translationCatalog(models, snapshot.model, snapshot.model), boundaryModel: snapshot.model, comparisonSupported: snapshot.provider === 'ollama' },
       whisper: { ready: config.whisperRunner ? true : whisperInstallation().ready, model: process.env.WHISPER_MODEL_LABEL || 'Whisper large-v3 · FP16' },
       recording: activeRecordings.size > 0, processing: processing || leasing || Boolean(activeLease) || speech.busy || activeTranslations.size > 0, translating: activeTranslations.size > 0,
